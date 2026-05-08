@@ -20,4 +20,8 @@ public class TaskService {
     public List<Task> getAllTasks() {
         return taskRepository.findAll();
     }
+
+    public List<Task> getTasksBySprintId(Long sprintId) {
+        return taskRepository.findBySprintId(sprintId);
+    }
 }

@@ -9,6 +9,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/tasks")
+@CrossOrigin("*")
 public class TaskController {
 
     @Autowired
@@ -22,5 +23,10 @@ public class TaskController {
     @GetMapping
     public List<Task> getAll() {
         return taskService.getAllTasks();
+    }
+
+    @GetMapping("/sprint/{sprintId}")
+    public List<Task> getTasksBySprintId(@PathVariable Long sprintId) {
+        return taskService.getTasksBySprintId(sprintId);
     }
 }
