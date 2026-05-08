@@ -1,28 +1,33 @@
 package com.agileai.agile_resource_optimizer.config;
 
 import com.agileai.agile_resource_optimizer.model.Developer;
+import com.agileai.agile_resource_optimizer.model.Sprint;
 import com.agileai.agile_resource_optimizer.model.Task;
 import com.agileai.agile_resource_optimizer.repository.DeveloperRepository;
+import com.agileai.agile_resource_optimizer.repository.SprintRepository;
 import com.agileai.agile_resource_optimizer.repository.TaskRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 @Configuration
 public class DataLoader {
 
     @Bean
-    CommandLineRunner initDatabase(DeveloperRepository devRepo, TaskRepository taskRepo) {
+    CommandLineRunner initDatabase(DeveloperRepository devRepo, TaskRepository taskRepo, SprintRepository sprintRepo) {
         return args -> {
             seedDevelopers(devRepo);
-            seedTasks(taskRepo);
+            List<Sprint> sprints = seedSprints(sprintRepo);
+            seedTasks(taskRepo, sprints);
         };
     }
 
     private void seedDevelopers(DeveloperRepository repo) {
-        // Avoid duplicate insert
         if (repo.count() > 0) {
             System.out.println("Developers already exist. Skipping seeding...");
             return;
@@ -30,43 +35,62 @@ public class DataLoader {
 
         Random rand = new Random();
 
-        for (int i = 1; i <= 30; i++) { // Increased to 30 as per Python script
+        for (int i = 1; i <= 30; i++) {
             Developer dev = new Developer();
             dev.setDev_id("D" + i);
-
-            // Experience: 1, 2, or 3
             int exp = rand.nextInt(3) + 1;
             dev.setExperience_level(exp);
-
-            // Skills: 1 to 5
             dev.setSkill_frontend(rand.nextInt(5) + 1);
             dev.setSkill_backend(rand.nextInt(5) + 1);
             dev.setSkill_db(rand.nextInt(5) + 1);
-
-            // Consistency: 0.6 to 1.0
             dev.setConsistency(0.6 + (1.0 - 0.6) * rand.nextDouble());
-
-            // Learning Rate: 0.01 to 0.1
             dev.setLearning_rate(0.01 + (0.1 - 0.01) * rand.nextDouble());
-
-            // Workload & Tasks
             int tasks = rand.nextInt(6) + 1;
             dev.setCurrent_tasks(tasks);
-            int workload = tasks * (rand.nextInt(6) + 3); // 3 to 8
+            int workload = tasks * (rand.nextInt(6) + 3);
             dev.setCurrent_workload(workload);
-
-            // Availability: max(0, 100 - workload * rand(3, 6))
             double availability = Math.max(0, 100 - workload * (3 + rand.nextDouble() * 3));
             dev.setAvailability(availability);
-
             repo.save(dev);
         }
 
-        System.out.println("✅ 30 Developers inserted into database (aligned with training data)!");
+        System.out.println("✅ 30 Developers inserted into database!");
     }
 
-    private void seedTasks(TaskRepository repo) {
-        // Avoid duplicate insert
+    private List<Sprint> seedSprints(SprintRepository repo) {
+        if (repo.count() > 0) {
+            System.out.println("Sprints already exist. Skipping seeding...");
+            return repo.findAll();
+        }
+
+        List<Sprint> sprints = new ArrayList<>();
+        
+        sprints.add(repo.save(Sprint.builder()
+                .sprintId("S-2024-01")
+                .startDate(LocalDate.now().minusDays(14))
+                .endDate(LocalDate.now())
+                .status("COMPLETED")
+                .build()));
+
+        sprints.add(repo.save(Sprint.builder()
+                .sprintId("S-2024-02")
+                .startDate(LocalDate.now())
+                .endDate(LocalDate.now().plusDays(14))
+                .status("ACTIVE")
+                .build()));
+
+        sprints.add(repo.save(Sprint.builder()
+                .sprintId("S-2024-03")
+                .startDate(LocalDate.now().plusDays(14))
+                .endDate(LocalDate.now().plusDays(28))
+                .status("PLANNED")
+                .build()));
+
+        System.out.println("✅ 3 Sprints inserted into database!");
+        return sprints;
+    }
+
+    private void seedTasks(TaskRepository repo, List<Sprint> sprints) {
         if (repo.count() > 0) {
             System.out.println("Tasks already exist. Skipping seeding...");
             return;
@@ -96,15 +120,18 @@ public class DataLoader {
             task.setReq_frontend(Integer.parseInt(data[3]));
             task.setReq_backend(Integer.parseInt(data[4]));
             task.setReq_db(Integer.parseInt(data[5]));
+            task.setAmbiguity(rand.nextDouble());
+            task.setDependency_risk(rand.nextDouble());
             
-            // New fields from Python script
-            task.setAmbiguity(rand.nextDouble()); // 0.0 to 1.0
-            task.setDependency_risk(rand.nextDouble()); // 0.0 to 1.0
+            // Assign a random sprint
+            if (!sprints.isEmpty()) {
+                task.setSprint(sprints.get(rand.nextInt(sprints.size())));
+            }
             
             repo.save(task);
         }
 
-        System.out.println("✅ " + taskData.length + " Realistic Tasks inserted into database!");
+        System.out.println("✅ " + taskData.length + " Realistic Tasks inserted and linked to Sprints!");
     }
 
 }

@@ -1,17 +1,16 @@
 package com.agileai.agile_resource_optimizer.service;
 
-import com.agileai.agile_resource_optimizer.model.Developer;
-import com.agileai.agile_resource_optimizer.model.TaskRequest;
-import com.agileai.agile_resource_optimizer.repository.DeveloperRepository;
+import com.agileai.agile_resource_optimizer.model.*;
+import com.agileai.agile_resource_optimizer.repository.*;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class RankingService {
@@ -20,36 +19,152 @@ public class RankingService {
     private DeveloperRepository developerRepository;
 
     @Autowired
+    private TaskRepository taskRepository;
+
+    @Autowired
+    private SprintRepository sprintRepository;
+
+    @Autowired
+    private AllocationRepository allocationRepository;
+
+    @Autowired
     private RestTemplate restTemplate;
 
     @Value("${python.api.url}")
     private String pythonApiUrl;
 
-    public String rankDevelopers(TaskRequest task) {
+    public List<Map<String, Object>> rankDevelopers(TaskRequest taskRequest) {
 
-        // GET DEVELOPERS FROM POSTGRESQL
+        // 1. GET DEVELOPERS FROM POSTGRESQL
         List<Developer> developers = developerRepository.findAll();
 
-        // BUILD FULL PAYLOAD
+        // 2. BUILD PAYLOAD
         Map<String, Object> payload = new HashMap<>();
-        payload.put("task", task);
+        payload.put("task", taskRequest);
         payload.put("developers", developers);
-
-        System.out.println("PAYLOAD:");
-        System.out.println(payload);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        HttpEntity<Map<String, Object>> request =
-                new HttpEntity<>(payload, headers);
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
 
+        // 3. CALL ML SERVICE
         ResponseEntity<String> response = restTemplate.postForEntity(
                 pythonApiUrl,
                 request,
                 String.class
         );
 
-        return response.getBody();
+        // 4. PARSE RESPONSE
+        ObjectMapper mapper = new ObjectMapper();
+        List<Map<String, Object>> rankings = new ArrayList<>();
+        try {
+            rankings = mapper.readValue(response.getBody(), new TypeReference<>() {});
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Collections.emptyList();
+        }
+
+        // 5. LOOKUP SPRINT AND TASK
+        Optional<Sprint> sprintOpt = sprintRepository.findBySprintId(taskRequest.getSprintId());
+        Optional<Task> taskOpt = taskRequest.getTaskId() != null ? 
+                taskRepository.findById(taskRequest.getTaskId()) : Optional.empty();
+
+        // 6. SAVE ALLOCATIONS
+        for (Map<String, Object> rank : rankings) {
+            String dev_id = rank.get("dev_id").toString();
+            Optional<Developer> devOpt = developerRepository.findByDev_id(dev_id);
+
+            if (devOpt.isPresent()) {
+                Allocation allocation = Allocation.builder()
+                        .developer(devOpt.get())
+                        .sprint(sprintOpt.orElse(null))
+                        .task(taskOpt.orElse(null))
+                        .mlScore(Double.valueOf(rank.get("predicted_performance").toString()))
+                        .skillMatchScore(Double.valueOf(rank.get("skill_match_score").toString()))
+                        .workloadBalance(Double.valueOf(rank.get("workload_balance").toString()))
+                        .finalScore(Double.valueOf(rank.get("final_score").toString()))
+                        .rankPosition(Integer.valueOf(rank.get("rank").toString()))
+                        .status("RECOMMENDED")
+                        .explanation("AI Recommended")
+                        .build();
+
+                allocationRepository.save(allocation);
+            }
+        }
+        return rankings;
+    }
+
+    public List<Map<String, Object>> allocateSprint(Long sprintId) {
+        // 1. GET SPRINT AND TASKS
+        Optional<Sprint> sprintOpt = sprintRepository.findById(sprintId);
+        if (sprintOpt.isEmpty()) {
+            throw new RuntimeException("Sprint not found");
+        }
+        Sprint sprint = sprintOpt.get();
+        List<Task> tasks = sprint.getTasks();
+        List<Developer> developers = developerRepository.findAll();
+
+        if (tasks == null || tasks.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 2. BUILD PAYLOAD
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("tasks", tasks);
+        payload.put("developers", developers);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+
+        // 3. CALL ML SERVICE (/allocate-sprint)
+        String bulkUrl = pythonApiUrl.replace("/predict", "/allocate-sprint");
+        if (!pythonApiUrl.contains("/predict")) {
+            bulkUrl = pythonApiUrl.endsWith("/") ? pythonApiUrl + "allocate-sprint" : pythonApiUrl + "/allocate-sprint";
+        }
+
+        System.out.println("Calling ML Bulk Allocation at: " + bulkUrl);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(bulkUrl, request, Map.class);
+            
+            if (response.getStatusCode() != HttpStatus.OK) {
+                throw new RuntimeException("ML Service returned error: " + response.getStatusCode());
+            }
+
+            Map<String, Object> responseBody = response.getBody();
+            List<Map<String, Object>> allocationsRaw = (List<Map<String, Object>>) responseBody.get("allocations");
+
+            // 4. SAVE ALLOCATIONS
+            for (Map<String, Object> allocData : allocationsRaw) {
+                Long taskId = Long.valueOf(allocData.get("task_id").toString());
+                String devIdStr = allocData.get("dev_id").toString();
+                
+                Optional<Task> taskOpt = taskRepository.findById(taskId);
+                Optional<Developer> devOpt = developerRepository.findByDev_id(devIdStr);
+
+                if (taskOpt.isPresent() && devOpt.isPresent()) {
+                    Allocation allocation = Allocation.builder()
+                            .developer(devOpt.get())
+                            .sprint(sprint)
+                            .task(taskOpt.get())
+                            .mlScore(0.0) // Optional: add more details if returned by Python
+                            .finalScore(Double.valueOf(allocData.get("match_score").toString()))
+                            .skillMatchScore(Double.valueOf(allocData.get("skill_match").toString()))
+                            .status("AUTO_ALLOCATED")
+                            .explanation("Bulk AI Recommendation")
+                            .build();
+
+                    allocationRepository.save(allocation);
+                }
+            }
+            return allocationsRaw;
+
+        } catch (Exception e) {
+            System.err.println("❌ Error during bulk allocation: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to allocate sprint: " + e.getMessage());
+        }
     }
 }

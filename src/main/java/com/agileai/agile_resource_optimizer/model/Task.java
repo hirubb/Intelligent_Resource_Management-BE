@@ -14,7 +14,12 @@ public class Task {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
+    @ManyToOne
+    @JoinColumn(name = "sprint_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Sprint sprint;
+
     private String task_type;
     private int task_complexity;
     private int story_points;
