@@ -25,4 +25,9 @@ public class RankingController {
     public List<Map<String, Object>> allocateSprint(@PathVariable Long id) {
         return rankingService.allocateSprint(id);
     }
+
+    @PostMapping("/recommendations/sprint/{id}")
+    public List<Map<String, Object>> getSprintRecommendations(@PathVariable Long id) {
+        return rankingService.getSprintRecommendations(id);
+    }
 }

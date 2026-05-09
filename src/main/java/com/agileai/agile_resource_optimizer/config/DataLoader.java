@@ -1,8 +1,10 @@
 package com.agileai.agile_resource_optimizer.config;
 
 import com.agileai.agile_resource_optimizer.model.Developer;
+import com.agileai.agile_resource_optimizer.model.DeveloperProfile;
 import com.agileai.agile_resource_optimizer.model.Sprint;
 import com.agileai.agile_resource_optimizer.model.Task;
+import com.agileai.agile_resource_optimizer.repository.DeveloperProfileRepository;
 import com.agileai.agile_resource_optimizer.repository.DeveloperRepository;
 import com.agileai.agile_resource_optimizer.repository.SprintRepository;
 import com.agileai.agile_resource_optimizer.repository.TaskRepository;
@@ -19,16 +21,16 @@ import java.util.Random;
 public class DataLoader {
 
     @Bean
-    CommandLineRunner initDatabase(DeveloperRepository devRepo, TaskRepository taskRepo, SprintRepository sprintRepo) {
+    CommandLineRunner initDatabase(DeveloperProfileRepository profileRepo, DeveloperRepository devRepo, TaskRepository taskRepo, SprintRepository sprintRepo) {
         return args -> {
-            seedDevelopers(devRepo);
+            seedDevelopers(profileRepo, devRepo);
             List<Sprint> sprints = seedSprints(sprintRepo);
             seedTasks(taskRepo, sprints);
         };
     }
 
-    private void seedDevelopers(DeveloperRepository repo) {
-        if (repo.count() > 0) {
+    private void seedDevelopers(DeveloperProfileRepository profileRepo, DeveloperRepository devRepo) {
+        if (devRepo.count() > 0) {
             System.out.println("Developers already exist. Skipping seeding...");
             return;
         }
@@ -51,7 +53,18 @@ public class DataLoader {
             dev.setCurrent_workload(workload);
             double availability = Math.max(0, 100 - workload * (3 + rand.nextDouble() * 3));
             dev.setAvailability(availability);
-            repo.save(dev);
+
+            DeveloperProfile profile = new DeveloperProfile();
+            profile.setFirstName("Developer");
+            profile.setLastName(String.valueOf(i));
+            profile.setAge(rand.nextInt(35) + 22); // Age 22 to 56
+            profile.setEmail("dev" + i + "@agileai.com");
+            profile.setPhoneNumber("123-456-78" + String.format("%02d", i));
+
+            profile.setDeveloperMetrics(dev);
+            dev.setProfile(profile);
+
+            profileRepo.save(profile);
         }
 
         System.out.println("✅ 30 Developers inserted into database!");

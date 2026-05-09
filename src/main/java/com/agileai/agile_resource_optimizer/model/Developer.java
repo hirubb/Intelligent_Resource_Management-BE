@@ -3,6 +3,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "developers")
@@ -23,5 +24,9 @@ public class Developer {
     private int current_tasks;
     private double consistency;
     private double learning_rate;
+
+    @OneToOne(mappedBy = "developerMetrics")
+    @JsonIgnore
+    private DeveloperProfile profile;
 
 }
