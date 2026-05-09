@@ -30,4 +30,9 @@ public class RankingController {
     public List<Map<String, Object>> getSprintRecommendations(@PathVariable Long id) {
         return rankingService.getSprintRecommendations(id);
     }
+
+    @PostMapping("/explain/{allocationId}")
+    public Map<String, Object> explainAllocation(@PathVariable Long allocationId) {
+        return rankingService.explainAllocation(allocationId);
+    }
 }

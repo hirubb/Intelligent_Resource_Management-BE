@@ -251,4 +251,60 @@ public class RankingService {
             throw new RuntimeException("Failed to get sprint recommendations: " + e.getMessage());
         }
     }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> explainAllocation(Long allocationId) {
+        // 1. GET ALLOCATION
+        Optional<Allocation> allocationOpt = allocationRepository.findById(allocationId);
+        if (allocationOpt.isEmpty()) {
+            throw new RuntimeException("Allocation not found for ID: " + allocationId);
+        }
+        Allocation allocation = allocationOpt.get();
+
+        // 2. GET TASK, DEVELOPER, AND ALL DEVELOPERS
+        Task task = allocation.getTask();
+        Developer assignedDeveloper = allocation.getDeveloper();
+        List<Developer> allDevelopers = developerRepository.findAll();
+
+        if (task == null || assignedDeveloper == null) {
+            throw new RuntimeException("Allocation is missing Task or Developer.");
+        }
+
+        // 3. BUILD PAYLOAD
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("dev_id", assignedDeveloper.getDev_id());
+        payload.put("task", task);
+        payload.put("developers", allDevelopers);
+        payload.put("predicted_performance", allocation.getMlScore());
+        payload.put("skill_match_score", allocation.getSkillMatchScore());
+        payload.put("workload_balance", allocation.getWorkloadBalance());
+        payload.put("final_score", allocation.getFinalScore());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+
+        // 4. CALL ML SERVICE (/explain)
+        String explainUrl = pythonApiUrl.replace("/predict", "/explain");
+        if (!pythonApiUrl.contains("/predict")) {
+            explainUrl = pythonApiUrl.endsWith("/") ? pythonApiUrl + "explain" : pythonApiUrl + "/explain";
+        }
+
+        System.out.println("Calling ML Explain Allocation at: " + explainUrl);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(explainUrl, request, Map.class);
+            
+            if (response.getStatusCode() != HttpStatus.OK) {
+                throw new RuntimeException("ML Service returned error: " + response.getStatusCode());
+            }
+
+            return response.getBody();
+
+        } catch (Exception e) {
+            System.err.println("❌ Error during explanation generation: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to get explanation: " + e.getMessage());
+        }
+    }
 }
