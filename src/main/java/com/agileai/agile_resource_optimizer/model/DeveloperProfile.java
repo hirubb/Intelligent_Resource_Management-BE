@@ -22,7 +22,11 @@ public class DeveloperProfile {
     private String lastName;
     private int age;
     private String email;
+    private String password;
     private String phoneNumber;
+    private String specialization;
+    @Column(length = 1000)
+    private String bio;
 
     @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "developer_id", referencedColumnName = "id")

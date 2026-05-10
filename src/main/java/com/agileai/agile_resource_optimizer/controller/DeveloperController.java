@@ -32,5 +32,18 @@ public class DeveloperController {
         return developerService.getAllDeveloperProfiles();
     }
 
-    
+    @GetMapping("/{id}")
+    public Developer getById(@PathVariable Long id) {
+        return developerService.getDeveloperById(id);
+    }
+
+    @GetMapping("/profile/{id}")
+    public DeveloperProfile getProfileById(@PathVariable Long id) {
+        return developerService.getDeveloperProfileById(id);
+    }
+
+    @GetMapping("/{id}/profile")
+    public DeveloperProfile getProfileByDevId(@PathVariable Long id) {
+        return developerService.getProfileByDeveloperId(id);
+    }
 }

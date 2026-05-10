@@ -39,7 +39,10 @@ public class DeveloperService {
         profile.setLastName(request.getLastName());
         profile.setAge(request.getAge());
         profile.setEmail(request.getEmail());
+        profile.setPassword(request.getPassword()); // In a real system, you'd hash this
         profile.setPhoneNumber(request.getPhoneNumber());
+        profile.setSpecialization(request.getSpecialization());
+        profile.setBio(request.getBio());
 
         profile.setDeveloperMetrics(developer); // Link them
         developer.setProfile(profile);
@@ -53,6 +56,19 @@ public class DeveloperService {
 
     public List<Developer> getAllDevelopers() {
         return developerRepository.findAll();
+    }
+
+    public Developer getDeveloperById(Long id) {
+        return developerRepository.findById(id).orElseThrow(() -> new RuntimeException("Developer not found"));
+    }
+
+    public DeveloperProfile getDeveloperProfileById(Long id) {
+        return developerProfileRepository.findById(id).orElseThrow(() -> new RuntimeException("Profile not found"));
+    }
+
+    public DeveloperProfile getProfileByDeveloperId(Long developerId) {
+        return developerProfileRepository.findByDeveloperMetricsId(developerId)
+                .orElseThrow(() -> new RuntimeException("Profile for developer " + developerId + " not found"));
     }
 
     // =====================================================

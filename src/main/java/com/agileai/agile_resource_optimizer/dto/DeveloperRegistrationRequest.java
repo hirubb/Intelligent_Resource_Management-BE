@@ -9,7 +9,10 @@ public class DeveloperRegistrationRequest {
     private String lastName;
     private int age;
     private String email;
+    private String password;
     private String phoneNumber;
+    private String specialization;
+    private String bio;
 
     // ML / Optimization Metrics
     private String devId;
