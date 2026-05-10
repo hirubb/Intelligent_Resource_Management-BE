@@ -20,4 +20,19 @@ public class SprintService {
     public Sprint getSprintById(Long id) {
         return sprintRepository.findById(id).orElseThrow(() -> new RuntimeException("Sprint not found"));
     }
+
+    public Sprint completeSprint(Long id) {
+        Sprint sprint = sprintRepository.findById(id).orElseThrow(() -> new RuntimeException("Sprint not found"));
+
+        // Check if all tasks are completed
+        boolean allTasksCompleted = sprint.getTasks().stream()
+                .allMatch(task -> com.agileai.agile_resource_optimizer.model.TaskStatus.COMPLETED.equals(task.getStatus()));
+
+        if (!allTasksCompleted) {
+            throw new RuntimeException("Cannot complete sprint. Some tasks are still in progress.");
+        }
+
+        sprint.setStatus("COMPLETED");
+        return sprintRepository.save(sprint);
+    }
 }

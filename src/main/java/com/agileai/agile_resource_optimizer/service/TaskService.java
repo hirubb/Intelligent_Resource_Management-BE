@@ -87,4 +87,15 @@ public class TaskService {
 
     return logs;
 }
+
+    public Task updateTaskStatus(Long id, com.agileai.agile_resource_optimizer.model.TaskStatus status) {
+        Task task = taskRepository.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        task.setStatus(status);
+        if (status == com.agileai.agile_resource_optimizer.model.TaskStatus.COMPLETED) {
+            task.setCompleted_at(java.time.LocalDateTime.now());
+        } else if (status == com.agileai.agile_resource_optimizer.model.TaskStatus.IN_PROGRESS && task.getStarted_at() == null) {
+            task.setStarted_at(java.time.LocalDateTime.now());
+        }
+        return taskRepository.save(task);
+    }
 }

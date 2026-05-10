@@ -26,7 +26,7 @@ public class Developer {
     private double learning_rate;
 
     @OneToOne(mappedBy = "developerMetrics")
-    @JsonIgnore
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties("developerMetrics")
     private DeveloperProfile profile;
 
 }

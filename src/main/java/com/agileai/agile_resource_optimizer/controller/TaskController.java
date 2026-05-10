@@ -34,4 +34,9 @@ public class TaskController {
     public List<Task> getTasksByDeveloperId(@PathVariable Long developerId) {
         return taskService.getTasksByDeveloperId(developerId);
     }
+
+    @PatchMapping("/{id}/status")
+    public Task updateTaskStatus(@PathVariable Long id, @RequestParam com.agileai.agile_resource_optimizer.model.TaskStatus status) {
+        return taskService.updateTaskStatus(id, status);
+    }
 }

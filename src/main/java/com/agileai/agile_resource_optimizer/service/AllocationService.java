@@ -81,8 +81,9 @@ public class AllocationService {
             }
         }
 
-        // 3. Assign developer to the task entity
+        // 3. Assign developer to the task entity and set status to PLANNED
         task.setDeveloper(developer);
+        task.setStatus(com.agileai.agile_resource_optimizer.model.TaskStatus.PLANNED);
         taskRepository.save(task);
 
         // 4. Update developer's workload metrics so the ML model receives
@@ -115,5 +116,34 @@ public class AllocationService {
 
         allocation.setStatus("DECLINED");
         return allocationRepository.save(allocation);
+    }
+
+    /**
+     * Approve all top-ranked (Rank 1) recommendations for all pending tasks in a sprint.
+     */
+    public void approveAllRecommendations(Long sprintId) {
+        List<Allocation> allAllocations = allocationRepository.findBySprint_Id(sprintId);
+
+        // Group by task to identify pending tasks
+        java.util.Map<Long, List<Allocation>> taskGroups = allAllocations.stream()
+            .collect(java.util.stream.Collectors.groupingBy(a -> a.getTask().getId()));
+
+        for (java.util.Map.Entry<Long, List<Allocation>> entry : taskGroups.entrySet()) {
+            List<Allocation> allocations = entry.getValue();
+
+            // Skip if any developer is already ALLOCATED for this task
+            boolean alreadyAllocated = allocations.stream()
+                .anyMatch(a -> "ALLOCATED".equals(a.getStatus()));
+
+            if (!alreadyAllocated) {
+                // Find the Rank 1 recommendation
+                allocations.stream()
+                    .filter(a -> a.getRankPosition() == 1 && "RECOMMENDED".equals(a.getStatus()))
+                    .findFirst()
+                    .ifPresent(topAlloc -> {
+                        assignRecommendedDeveloper(topAlloc.getId(), topAlloc.getDeveloper().getId());
+                    });
+            }
+        }
     }
 }

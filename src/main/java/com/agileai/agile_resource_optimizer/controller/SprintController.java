@@ -24,4 +24,9 @@ public class SprintController {
     public Sprint getSprintById(@PathVariable Long id) {
         return sprintService.getSprintById(id);
     }
+
+    @PostMapping("/{id}/complete")
+    public Sprint completeSprint(@PathVariable Long id) {
+        return sprintService.completeSprint(id);
+    }
 }

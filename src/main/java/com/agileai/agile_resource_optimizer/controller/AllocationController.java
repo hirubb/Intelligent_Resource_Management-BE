@@ -49,4 +49,12 @@ public class AllocationController {
     public Allocation declineAllocation(@PathVariable Long allocationId) {
         return allocationService.declineAllocation(allocationId);
     }
+
+    /**
+     * Approve all top-ranked recommendations for a sprint.
+     */
+    @PostMapping("/approve-all/sprint/{sprintId}")
+    public void approveAllRecommendations(@PathVariable Long sprintId) {
+        allocationService.approveAllRecommendations(sprintId);
+    }
 }

@@ -8,6 +8,7 @@ import java.util.List;
 
 @Repository
 public interface TaskRepository extends JpaRepository<Task, Long> {
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"developer", "developer.profile"})
     List<Task> findBySprintId(Long sprintId);
     List<Task> findByDeveloperId(Long developerId);
 }
