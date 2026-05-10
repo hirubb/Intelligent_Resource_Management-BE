@@ -7,7 +7,10 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import com.agileai.agile_resource_optimizer.model.Sprint;
+import com.agileai.agile_resource_optimizer.model.Task;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class BehaviorSyncService {
@@ -22,6 +25,10 @@ public class BehaviorSyncService {
     private String pythonApiUrl;
 
     public void syncBehaviorFromML(List<Map<String, Object>> sprintLogs) {
+        if (sprintLogs == null || sprintLogs.isEmpty()) {
+            System.out.println("No logs to sync.");
+            return;
+        }
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("logs", sprintLogs);
@@ -29,32 +36,48 @@ public class BehaviorSyncService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        //log it
-        System.out.println("Sending payload to ML:");
-        System.out.println(payload);
+        System.out.println("Sending " + sprintLogs.size() + " task logs to ML...");
 
-        HttpEntity<Map<String, Object>> request =
-                new HttpEntity<>(payload, headers);
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
 
-        String url = pythonApiUrl.replace("/predict", "/behavior/predict-all");
+        try {
+            // Replace /predict with /behavior/predict-all in the URL
+            String url = pythonApiUrl.replace("/predict", "/behavior/predict-all");
 
-        ResponseEntity<Map> response =
-                restTemplate.postForEntity(url, request, Map.class);
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
+            Map<String, Object> body = response.getBody();
 
-        Map<String, Object> body = response.getBody();
-
-        if (body == null || !body.containsKey("developers")) {
-            return;
+            if (body != null && body.containsKey("developers")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> results = (List<Map<String, Object>>) body.get("developers");
+                System.out.println("Received metrics for " + results.size() + " developers from ML.");
+                developerService.updateBehaviorMetrics(results);
+            }
+        } catch (Exception e) {
+            System.err.println("Error syncing behavior from ML: " + e.getMessage());
+            e.printStackTrace();
         }
+    }
 
-        //log
-        System.out.println("ML Response:");
-System.out.println(body);
+    /**
+     * Extracts behavioral metrics from a completed sprint and sends them to ML.
+     */
+    public void syncSprintMetrics(Sprint sprint) {
+        List<Map<String, Object>> logs = sprint.getTasks().stream()
+                .filter(task -> task.getDeveloper() != null)
+                .map(task -> {
+                    Map<String, Object> log = new HashMap<>();
+                    log.put("dev_id", task.getDeveloper().getDev_id());
+                    log.put("sprint_id", sprint.getId());
+                    log.put("completion_time", task.getCompletion_time());
+                    log.put("defects", task.getDefects());
+                    log.put("velocity_contribution", task.getVelocity_contribution());
+                    log.put("blocked_tasks", task.isBlocked() ? 1 : 0);
+                    log.put("reopened_tasks", task.isReopened() ? 1 : 0);
+                    return log;
+                })
+                .collect(Collectors.toList());
 
-        List<Map<String, Object>> results =
-                (List<Map<String, Object>>) body.get("developers");
-
-        // 👉 delegate DB update to DeveloperService
-        developerService.updateBehaviorMetrics(results);
+        syncBehaviorFromML(logs);
     }
 }

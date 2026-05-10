@@ -39,4 +39,13 @@ public class TaskController {
     public Task updateTaskStatus(@PathVariable Long id, @RequestParam com.agileai.agile_resource_optimizer.model.TaskStatus status) {
         return taskService.updateTaskStatus(id, status);
     }
+    @PostMapping("/sprint/{sprintId}/complete-all")
+    public org.springframework.http.ResponseEntity<?> completeAllTasksInSprint(@PathVariable Long sprintId) {
+        try {
+            taskService.completeAllTasksInSprint(sprintId);
+            return org.springframework.http.ResponseEntity.ok(java.util.Map.of("message", "All tasks marked as completed"));
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.status(500).body(e.getMessage());
+        }
+    }
 }

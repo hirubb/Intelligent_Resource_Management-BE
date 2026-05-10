@@ -24,6 +24,11 @@ public class AllocationService {
     @Autowired
     private TaskRepository taskRepository;
 
+    public Allocation getAllocationById(Long id) {
+        return allocationRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Allocation not found with id: " + id));
+    }
+
     public List<Allocation> getAllocationsBySprint(Long sprintId) {
         return allocationRepository.findBySprint_Id(sprintId);
     }

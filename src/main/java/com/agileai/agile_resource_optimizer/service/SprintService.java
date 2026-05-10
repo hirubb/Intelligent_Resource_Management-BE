@@ -13,6 +13,9 @@ public class SprintService {
     @Autowired
     private SprintRepository sprintRepository;
 
+    @Autowired
+    private BehaviorSyncService behaviorSyncService;
+
     public List<Sprint> getAllSprints() {
         return sprintRepository.findAll();
     }
@@ -33,6 +36,15 @@ public class SprintService {
         }
 
         sprint.setStatus("COMPLETED");
-        return sprintRepository.save(sprint);
+        Sprint savedSprint = sprintRepository.save(sprint);
+
+        // Update developer behavioral metrics (consistency, learning rate)
+        try {
+            behaviorSyncService.syncSprintMetrics(savedSprint);
+        } catch (Exception e) {
+            System.err.println("Warning: Failed to sync behavioral metrics: " + e.getMessage());
+        }
+
+        return savedSprint;
     }
 }

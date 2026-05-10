@@ -14,6 +14,11 @@ public class AllocationController {
 
     @Autowired
     private AllocationService allocationService;
+    
+    @GetMapping("/{id}")
+    public Allocation getAllocationById(@PathVariable Long id) {
+        return allocationService.getAllocationById(id);
+    }
 
     /** All allocations for a sprint (used by the main AI-Allocation list page). */
     @GetMapping("/sprint/{id}")

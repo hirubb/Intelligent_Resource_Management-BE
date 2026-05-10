@@ -98,4 +98,13 @@ public class TaskService {
         }
         return taskRepository.save(task);
     }
+
+    public void completeAllTasksInSprint(Long sprintId) {
+        List<Task> tasks = taskRepository.findBySprintId(sprintId);
+        for (Task task : tasks) {
+            task.setStatus(com.agileai.agile_resource_optimizer.model.TaskStatus.COMPLETED);
+            task.setCompleted_at(java.time.LocalDateTime.now());
+        }
+        taskRepository.saveAll(tasks);
+    }
 }
