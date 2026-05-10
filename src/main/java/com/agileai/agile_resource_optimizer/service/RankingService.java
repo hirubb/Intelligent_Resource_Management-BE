@@ -178,10 +178,14 @@ public List<Map<String, Object>> getSprintRecommendations(Long sprintId) {
     Sprint sprint = sprintRepository.findById(sprintId)
             .orElseThrow(() -> new RuntimeException("Sprint not found"));
 
-    List<Task> tasks = sprint.getTasks();
+    List<Task> allTasks = sprint.getTasks();
+    List<Task> tasks = allTasks.stream()
+            .filter(t -> t.getDeveloper() == null)
+            .toList();
+
     List<Developer> developers = developerRepository.findAll();
 
-    if (tasks == null || tasks.isEmpty()) {
+    if (tasks.isEmpty()) {
         return Collections.emptyList();
     }
 
