@@ -28,6 +28,10 @@ public class TaskService {
         return taskRepository.findBySprintId(sprintId);
     }
 
+    public List<Task> getTasksByDeveloperId(Long developerId) {
+        return taskRepository.findByDeveloperId(developerId);
+    }
+
     // =====================================================
     // BUILD ML SPRINT LOGS
     // =====================================================

@@ -29,4 +29,9 @@ public class TaskController {
     public List<Task> getTasksBySprintId(@PathVariable Long sprintId) {
         return taskService.getTasksBySprintId(sprintId);
     }
+
+    @GetMapping("/developer/{developerId}")
+    public List<Task> getTasksByDeveloperId(@PathVariable Long developerId) {
+        return taskService.getTasksByDeveloperId(developerId);
+    }
 }
