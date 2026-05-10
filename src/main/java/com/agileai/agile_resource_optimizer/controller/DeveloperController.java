@@ -31,4 +31,6 @@ public class DeveloperController {
     public List<DeveloperProfile> getAllProfiles() {
         return developerService.getAllDeveloperProfiles();
     }
+
+    
 }

@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class DeveloperService {
@@ -52,4 +54,48 @@ public class DeveloperService {
     public List<Developer> getAllDevelopers() {
         return developerRepository.findAll();
     }
+
+    // =====================================================
+// UPDATE BEHAVIOR METRICS (FROM ML)
+// =====================================================
+public void updateBehaviorMetrics(List<Map<String, Object>> devs) {
+
+    for (Map<String, Object> dev : devs) {
+
+        Object devIdObj = dev.get("dev_id");
+        if (devIdObj == null) continue;
+
+        String devId = devIdObj.toString();
+
+        Optional<Developer> optionalDev =
+                developerRepository.findByDev_id(devId);
+
+        if (optionalDev.isEmpty()) continue;
+
+        Developer developer = optionalDev.get();
+
+        // SAFE parsing (prevents crashes)
+        developer.setConsistency(
+                parseDoubleSafe(dev.get("consistency"))
+        );
+
+        developer.setLearning_rate(
+                parseDoubleSafe(dev.get("learning_rate"))
+        );
+
+        developerRepository.save(developer);
+    }
+    }
+    // =====================================================
+// SAFE DOUBLE PARSER
+// =====================================================
+private double parseDoubleSafe(Object value) {
+    try {
+        if (value == null) return 0.0;
+        return Double.parseDouble(value.toString());
+    } catch (Exception e) {
+        return 0.0;
+    }
+}
+    
 }

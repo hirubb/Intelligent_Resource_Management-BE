@@ -2,6 +2,8 @@ package com.agileai.agile_resource_optimizer.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 
 @Entity
 @Table(name = "allocations")
@@ -22,6 +24,7 @@ public class Allocation {
 
     @ManyToOne
     @JoinColumn(name = "sprint_id")
+    @JsonIgnore
     private Sprint sprint;
 
     @ManyToOne

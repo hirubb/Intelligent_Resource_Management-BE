@@ -169,88 +169,98 @@ public class RankingService {
         }
     }
 
+
+    //get recommendations for tasks in a sprint
     @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> getSprintRecommendations(Long sprintId) {
-        // 1. GET SPRINT AND TASKS
-        Optional<Sprint> sprintOpt = sprintRepository.findById(sprintId);
-        if (sprintOpt.isEmpty()) {
-            throw new RuntimeException("Sprint not found");
-        }
-        Sprint sprint = sprintOpt.get();
-        List<Task> tasks = sprint.getTasks();
-        List<Developer> developers = developerRepository.findAll();
+public List<Map<String, Object>> getSprintRecommendations(Long sprintId) {
 
-        if (tasks == null || tasks.isEmpty()) {
-            return Collections.emptyList();
-        }
+    // 1. GET SPRINT AND TASKS
+    Sprint sprint = sprintRepository.findById(sprintId)
+            .orElseThrow(() -> new RuntimeException("Sprint not found"));
 
-        // 2. BUILD PAYLOAD
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("tasks", tasks);
-        payload.put("developers", developers);
+    List<Task> tasks = sprint.getTasks();
+    List<Developer> developers = developerRepository.findAll();
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
-
-        // 3. CALL ML SERVICE (/rank-sprint)
-        String rankUrl = pythonApiUrl.replace("/predict", "/rank-sprint");
-        if (!pythonApiUrl.contains("/predict")) {
-            rankUrl = pythonApiUrl.endsWith("/") ? pythonApiUrl + "rank-sprint" : pythonApiUrl + "/rank-sprint";
-        }
-
-        System.out.println("Calling ML Sprint Ranking at: " + rankUrl);
-
-        try {
-            ResponseEntity<Map> response = restTemplate.postForEntity(rankUrl, request, Map.class);
-            
-            if (response.getStatusCode() != HttpStatus.OK) {
-                throw new RuntimeException("ML Service returned error: " + response.getStatusCode());
-            }
-
-            Map<String, Object> responseBody = response.getBody();
-            List<Map<String, Object>> recommendations = (List<Map<String, Object>>) responseBody.get("recommendations");
-
-            // 4. PERSIST RECOMMENDATIONS (OPTIONAL BUT RECOMMENDED)
-            for (Map<String, Object> taskRec : recommendations) {
-                Long taskId = Long.valueOf(taskRec.get("task_id").toString());
-                List<Map<String, Object>> devRecs = (List<Map<String, Object>>) taskRec.get("recommendations");
-                
-                Optional<Task> taskOpt = taskRepository.findById(taskId);
-                
-                if (taskOpt.isPresent()) {
-                    for (Map<String, Object> devData : devRecs) {
-                        String devIdStr = devData.get("dev_id").toString();
-                        Optional<Developer> devOpt = developerRepository.findByDev_id(devIdStr);
-                        
-                        if (devOpt.isPresent()) {
-                            Allocation allocation = Allocation.builder()
-                                    .developer(devOpt.get())
-                                    .sprint(sprint)
-                                    .task(taskOpt.get())
-                                    .mlScore(Double.valueOf(devData.get("predicted_performance").toString()))
-                                    .skillMatchScore(Double.valueOf(devData.get("skill_match_score").toString()))
-                                    .workloadBalance(Double.valueOf(devData.get("workload_balance").toString()))
-                                    .finalScore(Double.valueOf(devData.get("final_score").toString()))
-                                    .rankPosition(Integer.valueOf(devData.get("rank").toString()))
-                                    .status("RECOMMENDED")
-                                    .explanation("AI Recommended")
-                                    .build();
-                            
-                            allocationRepository.save(allocation);
-                        }
-                    }
-                }
-            }
-
-            return recommendations;
-
-        } catch (Exception e) {
-            System.err.println("❌ Error during sprint ranking: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Failed to get sprint recommendations: " + e.getMessage());
-        }
+    if (tasks == null || tasks.isEmpty()) {
+        return Collections.emptyList();
     }
+
+    // 2. BUILD PAYLOAD
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("tasks", tasks);
+    payload.put("developers", developers);
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+
+    // 3. CALL ML SERVICE
+    String rankUrl = pythonApiUrl.replace("/predict", "/rank-sprint");
+    if (!pythonApiUrl.contains("/predict")) {
+        rankUrl = pythonApiUrl.endsWith("/") ? pythonApiUrl + "rank-sprint" : pythonApiUrl + "/rank-sprint";
+    }
+
+    try {
+        ResponseEntity<Map> response =
+                restTemplate.postForEntity(rankUrl, request, Map.class);
+
+        Map<String, Object> responseBody = response.getBody();
+        List<Map<String, Object>> recommendations =
+                (List<Map<String, Object>>) responseBody.get("recommendations");
+
+        // 4. SAVE WITHOUT DUPLICATES
+        for (Map<String, Object> taskRec : recommendations) {
+
+            Long taskId = Long.valueOf(taskRec.get("task_id").toString());
+
+            Task task = taskRepository.findById(taskId)
+                    .orElse(null);
+
+            if (task == null) continue;
+
+            List<Map<String, Object>> devRecs =
+                    (List<Map<String, Object>>) taskRec.get("recommendations");
+
+            for (Map<String, Object> devData : devRecs) {
+
+                String devId = devData.get("dev_id").toString();
+
+                Developer developer = developerRepository.findByDev_id(devId)
+                        .orElse(null);
+
+                if (developer == null) continue;
+
+                Object explanationObj = devData.get("explanation");
+                    String explanationJson = new ObjectMapper().writeValueAsString(explanationObj);
+
+                // ✅ DUPLICATE CHECK (IMPORTANT FIX)
+                boolean exists = allocationRepository.existsBySprintAndTaskAndDeveloper(sprint, task, developer);
+
+                if (exists) continue;
+
+                Allocation allocation = Allocation.builder()
+                        .developer(developer)
+                        .sprint(sprint)
+                        .task(task)
+                        .mlScore(Double.valueOf(devData.get("predicted_performance").toString()))
+                        .skillMatchScore(Double.valueOf(devData.get("skill_match_score").toString()))
+                        .workloadBalance(Double.valueOf(devData.get("workload_balance").toString()))
+                        .finalScore(Double.valueOf(devData.get("final_score").toString()))
+                        .rankPosition(Integer.valueOf(devData.get("rank").toString()))
+                        .status("RECOMMENDED")
+                        .explanation(explanationJson)
+                        .build();
+
+                allocationRepository.save(allocation);
+            }
+        }
+
+        return recommendations;
+
+    } catch (Exception e) {
+        throw new RuntimeException("Failed to get sprint recommendations: " + e.getMessage(), e);
+    }
+}
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> explainAllocation(Long allocationId) {
@@ -307,4 +317,8 @@ public class RankingService {
             throw new RuntimeException("Failed to get explanation: " + e.getMessage());
         }
     }
+    
+
+    
+    
 }
